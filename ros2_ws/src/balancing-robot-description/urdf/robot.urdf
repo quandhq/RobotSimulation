@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<robot name="balancing_robot">
+
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.2 0.3 0.1"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 0.8 1"/>
+      </material>
+    </visual>
+  </link>
+
+</robot>
