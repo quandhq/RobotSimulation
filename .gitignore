@@ -1,0 +1,14 @@
+# Ignore ROS 2 generated folders
+install/
+build/
+log/
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore OS-specific files
+.DS_Store
+
+# Ignore .vscode
+.vscode/
