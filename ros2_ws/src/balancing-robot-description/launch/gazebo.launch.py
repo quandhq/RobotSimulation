@@ -29,19 +29,26 @@ def generate_launch_description():
     #--- 3. Start Gazebo ---
     # The "Physics" gym: Loads the standard Gazebo simulator
     gazebo = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')]),
+        PythonLaunchDescriptionSource([os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')]),
     )
 
     #--- 4. Spawn the Robot ---
     # The "Hand": take URDF and drop it into Gazebo
     # Note the '-z', '0.1' argument. We spawn it 10cm in the air so it doesn't clip the floor!
     spawn_entity = Node(
-        package='gazebo_ros',
-        executable='spawn_entity.py',
+        package='ros_gz_sim',
+        executable='create',
         arguments=['-topic', 'robot_description', '-entity', 'balancing_robto', '-z', '0.1'],
         output='screen'        
     )
-    #--- 5. Launch everything ---
+    # ---5. The Bridge (The Interpreter)---
+    bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=['/model/balancing_robot/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V'],
+        output='screen'
+    )
+    #--- 6. Launch everything ---
     return LaunchDescription([
         rsp_node,
         gazebo,
