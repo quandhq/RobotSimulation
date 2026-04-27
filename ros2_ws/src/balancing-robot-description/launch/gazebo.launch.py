@@ -26,10 +26,13 @@ def generate_launch_description():
         parameters=[{'robot_description': robot_desc}]
     ) 
 
-    #--- 3. Start Gazebo ---
-    # The "Physics" gym: Loads the standard Gazebo simulator
+    # 3. Start Gazebo Sim with a ground plane
     gazebo = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')]),
+        PythonLaunchDescriptionSource([os.path.join(
+            get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')]),
+        # 'empty.sdf' sometimes lacks a collision floor in certain versions
+        # 'default' or explicitly adding a ground plane is safer
+        launch_arguments={'gz_args': '-r -v 4 empty.sdf'}.items(),
     )
 
     #--- 4. Spawn the Robot ---
@@ -38,7 +41,7 @@ def generate_launch_description():
     spawn_entity = Node(
         package='ros_gz_sim',
         executable='create',
-        arguments=['-topic', 'robot_description', '-entity', 'balancing_robto', '-z', '0.1'],
+        arguments=['-topic', 'robot_description', '-entity', 'balancing_robot', '-z', '0.05'],
         output='screen'        
     )
     # ---5. The Bridge (The Interpreter)---
@@ -52,5 +55,6 @@ def generate_launch_description():
     return LaunchDescription([
         rsp_node,
         gazebo,
-        spawn_entity
+        spawn_entity,
+        bridge
     ])
