@@ -18,14 +18,23 @@ private:
     void imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
         // 1. Timing
         auto now = this->now();
+
+        if(last_time_.nanoseconds() <= 0 || now.seconds() <= last_time_.seconds())
+        {
+            RCLCPP_INFO(this->get_logger(), "Synchronizing time!\n");
+        }
+
         double dt = (now - last_time_).seconds();
+        RCLCPP_INFO(this->get_logger(), "now %f dt %f\n", now.seconds(), dt);
         if (dt <= 0) return;
 
-        // 2. Orientation (Convert Quaternion to Degrees)
-        tf2::Quaternion q(msg->orientation.x, msg->orientation.y, msg->orientation.z, msg->orientation.w);
-        double r, pitch, y;
-        tf2::Matrix3x3(q).getRPY(r, pitch, y);
-        float pitch_deg = pitch * 57.2958; // PID works best in degrees if gains are from Arduino
+        // 2. Physical Orientation (Calculate from Accelerometer raw data)
+        double acc_x = msg->linear_acceleration.x;
+        double acc_z = msg->linear_acceleration.z;
+    
+        // atan2 gives us the tilt angle in radians based on gravity
+        double pitch_rad = atan2(acc_x, acc_z); 
+        float pitch_deg = pitch_rad * 57.2958; // Convert to degrees
 
         // 3. THE MATH, PIDControl calss
         double output = pid_->calculatePIDOutput(target_angle_, pitch_deg, dt);
@@ -43,18 +52,21 @@ public:
     BalancerNode() : Node("balancer_node") {
         this->set_parameter(rclcpp::Parameter("use_sim_time", true));
         motor_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
+        auto qos = rclcpp::QoS(rclcpp::KeepLast(10)).best_effort();
         imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-            "/imu", rclcpp::SensorDataQoS(), std::bind(&BalancerNode::imu_callback, this, std::placeholders::_1));
+            "imu", qos, std::bind(&BalancerNode::imu_callback, this, std::placeholders::_1));
         
         // Initialize your class with the Arduino gains
         // Remember: Since simulation is 'perfect', start with lower gains!
         pid_ = std::make_unique<PIDControl>(10.0, 5.0, 0.5); 
         
         last_time_ = this->now();
+        std::cout << last_time_.seconds() << "\n";
     }
 };
 
 int main(int argc, char ** argv) {
+    std::cout << "START\n";
     rclcpp::init(argc, argv);
     rclcpp::spin(std::make_shared<BalancerNode>());
     rclcpp::shutdown();
