@@ -41,20 +41,34 @@ def generate_launch_description():
     spawn_entity = Node(
         package='ros_gz_sim',
         executable='create',
-        arguments=['-topic', 'robot_description', '-entity', 'balancing_robot', '-z', '0.05'],
+        arguments=['-topic', 'robot_description', '-entity', 'balancing_robot', '-z', '0.2'],
         output='screen'        
     )
     # ---5. The Bridge (The Interpreter)---
     bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        arguments=['/model/balancing_robot/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V'],
+        arguments=[
+            '/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
+            '/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
+            '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
+            '/model/balancing_robot/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
+        ],
         output='screen'
     )
-    #--- 6. Launch everything ---
+
+    #---6. controller node---
+    balancing_controller = Node(
+        package='balancing_controller',
+        executable='balancing_controller',
+        output='screen',
+        parameters=[{'use_sim_time':True}],
+    )
+    #--- 7. Launch everything ---
     return LaunchDescription([
         rsp_node,
         gazebo,
         spawn_entity,
-        bridge
+        bridge,
+        balancing_controller,
     ])

@@ -24,12 +24,18 @@
     </plugin>
   </gazebo>
 
-  <link name="base_footprint"/>
+  <link name="base_footprint">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
   
   <joint name="base_footprint_joint" type="fixed">
     <parent link="base_footprint" />
     <child link="base_link" />
-    <origin xyz="0 0 0" rpy="0 0 0" /> 
+    <!-- Change rpy from "0 0 0" to "0 0.035 0" (approx 2 degrees forward) -->
+    <origin xyz="0 0 0" rpy="0 0.035 0" /> 
   </joint>
 
 
