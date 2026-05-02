@@ -1,8 +1,7 @@
 #include <algorithm>
-#include "rclcpp/rclcpp.hpp"
 
 struct PIDComponents {
-    float p, i, d;
+    float p, i, d, raw_output;
 };
 
 class PIDControl
@@ -10,11 +9,11 @@ class PIDControl
 private:
     const float kp_, ki_, kd_;
     //for integral
-    double error_integral_;
+    float error_integral_;
     //for derivative
     float last_error_;
     bool is_first_calculation = true;
-    float output_p_ = 0.0, output_i_ = 0.0, output_d_ = 0.0; 
+    float output_p_ = 0.0, output_i_ = 0.0, output_d_ = 0.0, raw_output_ = 0.0;
 public:
     PIDControl(const float kp_, const float ki_, const float kd_)
     : kp_(kp_), ki_(ki_), kd_(kd_), error_integral_(0), last_error_(0)
@@ -23,7 +22,9 @@ public:
     }
     ~PIDControl(){};
     
-    double calculatePIDOutput(float target, float current_value, float dt)
+
+    //use when there is no rate sensor
+    float calculatePIDOutput(float target, float current_value, float dt)
     {
         //Derivative
         float error = target - current_value;
@@ -38,18 +39,15 @@ public:
         }
         this->last_error_ = error;
         //Integral
-        //Deadband
-        if(std::abs(error) > 0.2)
+        //Not using Deadband
+        if(std::abs(current_value) <= 10)
         {
-            if(std::abs(current_value) <= 10)
-            {
-                this->error_integral_ += error * dt;
-                this->error_integral_ = std::clamp(this->error_integral_, -20.0, 20.0);
-            } 
-            else
-            {
-                this->error_integral_ *= 0.99;
-            }
+            this->error_integral_ += error * dt;
+            this->error_integral_ = std::clamp(this->error_integral_, -0.5f, 0.5f);
+        } 
+        else
+        {
+            this->error_integral_ *= 0.99;
         }
         float output_i = this->error_integral_ * this->ki_;
         //Proportional
@@ -57,12 +55,51 @@ public:
         this->output_p_ = output_p;
         this->output_i_ = output_i;
         this->output_d_ = output_d;
-        return output_p + output_i + output_d;
+        float raw_output = std::clamp(output_p + output_i + output_d, -1.0f, 1.0f);
+        this->raw_output_ = raw_output;
+        return raw_output;    //return percentage
+    }
+
+    //use when there is rate sensor
+    double calculatePIDOutput(float target, float current_value, float rate_value, float dt)
+    {
+        //Derivative
+        float error = target - current_value;
+        float output_d = 0;
+        if(this->is_first_calculation == true)
+        {
+            this->is_first_calculation = false;
+        }
+        else
+        {
+            output_d = -rate_value * this->kd_;
+        }
+        this->last_error_ = error;
+        //Integral
+        //Not using Deadband
+        if(std::abs(current_value) <= 10)
+        {
+            this->error_integral_ += error * dt;
+            this->error_integral_ = std::clamp(this->error_integral_, -0.5f, 0.5f);
+        } 
+        else
+        {
+            this->error_integral_ *= 0.99;
+        }
+        float output_i = this->error_integral_ * this->ki_;
+        //Proportional
+        float output_p = error * this->kp_;
+        this->output_p_ = output_p;
+        this->output_i_ = output_i;
+        this->output_d_ = output_d;
+        float raw_output = std::clamp(output_p + output_i + output_d, -1.0f, 1.0f);
+        this->raw_output_ = raw_output;
+        return raw_output;    //return percentage
     }
 
     PIDComponents getPIDvalues()
     {
-        return {this->output_p_, this->output_i_, output_d_};
+        return {this->output_p_, this->output_i_, this->output_d_, this->raw_output_};
     }
 
     void reset()

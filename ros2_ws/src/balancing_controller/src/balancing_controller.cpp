@@ -5,14 +5,14 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include "balancing_controller/PIDController.hpp"
 
-// --- PASTE YOUR PIDCONTROL CLASS HERE ---
-
-#define Kp 0.1      // Significantly lower the "muscle"
+#define Kp 0.8      // Significantly lower the "muscle"
 #define Ki 0.0       // Keep at zero
 #define Kd 0.0      // Significantly increase the "braking" force
 #define SCALE 1       //to scale down the output of PID algorithm 
-#define GYRO_Y_PERCENTAGE 0.995
+#define GYRO_Y_PERCENTAGE 0.95
 #define ACCEL_PITCH_DEG_PERCENTAGE (1-GYRO_Y_PERCENTAGE)
+#define MOTOR_SPEED_CLAMPING 5.0
+#define MAX_LINEAR_VELOCITY 1.131 //Vmax​=34.8×0.0325=1.131 m/s, <limit velocity="34.8"/>, <wheel_radius>0.0325</wheel_radius>)
 
 class BalancerNode : public rclcpp::Node {
 private:
@@ -43,11 +43,20 @@ private:
         double acc_x = msg->linear_acceleration.x;
         double acc_z = msg->linear_acceleration.z;
         RCLCPP_INFO(this->get_logger(), "X: %f, Z: %f", acc_x, acc_z);
+
+        // SENSOR INTEGRITY CHECK: Wait for Gazebo physics gravity to kick in
+        double acc_mag = std::sqrt(acc_x*acc_x + acc_z*acc_z);
+        if (acc_mag < 5.0) {
+            RCLCPP_INFO(this->get_logger(), "acc_mag: %f, DROPT FRAME", acc_mag);
+            return; // Drop the frame, physics engine is still sending zeros
+        }
     
         double gyro_y = msg->angular_velocity.y; // Rad/sec, get the gyroscope data for instant data
         // atan2 gives us the tilt angle in radians based on gravity
         double accel_pitch_rad = atan2(acc_x, acc_z); // get the accelerometer for long term data
         float accel_pitch_deg = accel_pitch_rad * 57.2958; // Convert to degrees
+
+        //IF the robot falls forward, the accel is negative but the gyro_y is positive
 
         // Complementary Filter: 98% Gyro / 2% Accel
         if(this->is_filtered_pitch_first_initialized == false)
@@ -61,7 +70,7 @@ private:
         }
 
         auto drive = geometry_msgs::msg::Twist();
-        double output = 0.0;
+        double pid_output = 0.0;
         if(std::abs(filtered_pitch) >= 30)
         {
             (this->pid_)->reset();
@@ -71,18 +80,24 @@ private:
         }
         else
         {
-            // 3. THE MATH, PIDControl calss
-            output = pid_->calculatePIDOutput(target_angle_, filtered_pitch, dt);
-            
-            // 4. Act (Scale the output for Gazebo meters/second)
-            output = std::clamp(output*SCALE, -3.0, 3.0); // Scale down so it doesn't fly away
-            drive.linear.x = output;
-            RCLCPP_INFO(this->get_logger(), "Pitch: %f, Output: %f", filtered_pitch, output);
-            PIDComponents PIDvalues = pid_->getPIDvalues();
-            RCLCPP_INFO(this->get_logger(), "P: %f, I: %f, D: %f", PIDvalues.p, PIDvalues.i, PIDvalues.d);
+            if (std::abs(filtered_pitch) < 0.01) {
+                drive.linear.x = 0; // Don't fight tiny errors
+            }
+            else
+            {
+                // 3. THE MATH, PIDControl calss
+                pid_output = pid_->calculatePIDOutput(target_angle_, filtered_pitch, -gyro_y, dt);
+                float velocity_cmd = pid_output * MAX_LINEAR_VELOCITY;
+                // 4. Act (Scale the output for Gazebo meters/second)
+                drive.linear.x = velocity_cmd;
+                RCLCPP_INFO(this->get_logger(), "filtered_pitch: %f, velocity_cmd: %f", filtered_pitch, velocity_cmd);
+                PIDComponents PIDvalues = pid_->getPIDvalues();
+                RCLCPP_INFO(this->get_logger(), "P: %f, I: %f, D: %f", PIDvalues.p, PIDvalues.i, PIDvalues.d);
+            }
         }
+
         RCLCPP_INFO(this->get_logger(), "accel_pitch_deg: %f, gyro_y: %f", accel_pitch_deg, gyro_y);
-        // drive.linear.x = 0;
+        // drive.linear.x = 3;
         this->motor_pub_->publish(drive);
 
         last_time_ = now;

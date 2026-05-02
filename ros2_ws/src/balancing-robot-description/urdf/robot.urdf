@@ -1,8 +1,154 @@
 <?xml version="1.0"?>
+<robot name="ga25_80mm_chassis">
+
+  <material name="black_mica"> <color rgba="0.1 0.1 0.1 1"/> </material>
+
+  <link name="base_footprint"/>
+
+  <joint name="base_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <!-- Changed rpy from "0 0 0" to "0 0.035 0" to induce a 2-degree forward tilt -->
+    <origin xyz="0 0 0.0325" rpy="0 0.035 0"/> <!-- 65mm wheel radius -->
+  </joint>
+
+  <!-- Bottom Mica Plate -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0.0025" rpy="0 0 0"/>
+      <geometry> <box size="0.065 0.14 0.005"/> </geometry>
+      <material name="black_mica"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.0025" rpy="0 0 0"/>
+      <geometry> <box size="0.065 0.14 0.005"/> </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.5"/> 
+      <origin xyz="0 0 0.0025"/>
+      <!-- Updated I for bottom half -->
+      <inertia ixx="0.0008" ixy="0" ixz="0" iyy="0.00018" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+
+  <!-- Top Mica Plate -->
+  <link name="top_plate">
+    <visual>
+      <geometry> <box size="0.065 0.14 0.005"/> </geometry>
+      <material name="black_mica"/>
+    </visual>
+    <collision>
+      <geometry> <box size="0.065 0.14 0.005"/> </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.4"/> 
+      <inertia ixx="0.00065" ixy="0" ixz="0" iyy="0.00014" iyz="0" izz="0.00082"/>
+    </inertial>
+  </link>
+
+  <!-- THE 80MM SPACER JOINT -->
+  <joint name="spacer_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="top_plate"/>
+    <origin xyz="0 0 0.085" rpy="0 0 0"/> <!-- 80mm spacer + half plate thicknesses -->
+  </joint>
+
+  <!-- Wheels and Plugins (Same as before) -->
+  <link name="left_wheel">
+    <visual>
+      <geometry> <cylinder radius="0.0325" length="0.025"/> </geometry>
+      <material name="black_mica"/>
+    </visual>
+    <collision>
+      <geometry> <cylinder radius="0.0325" length="0.025"/> </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.1"/>
+      <inertia ixx="0.00003" ixy="0" ixz="0" iyy="0.00003" iyz="0" izz="0.00005"/>
+    </inertial>
+  </link>
+
+  <joint name="left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_wheel"/>
+    <origin xyz="0 0.08 0" rpy="-1.5708 0 0"/>
+    <axis xyz="0 0 1"/>
+    <!-- 12V 333RPM JGB37-520 motors => effort (max torque = 0.49 N.m), max velocity = 333RPM -->
+    <limit effort="0.49" velocity="34.8" /> 
+  </joint>
+
+  <link name="right_wheel">
+    <visual>
+      <geometry> <cylinder radius="0.0325" length="0.025"/> </geometry>
+      <material name="black_mica"/>
+    </visual>
+    <collision>
+      <geometry> <cylinder radius="0.0325" length="0.025"/> </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.1"/>
+      <inertia ixx="0.00003" ixy="0" ixz="0" iyy="0.00003" iyz="0" izz="0.00005"/>
+    </inertial>
+  </link>
+
+  <joint name="right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="right_wheel"/>
+    <origin xyz="0 -0.08 0" rpy="-1.5708 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="0.49" velocity="34.8" />
+  </joint>
+
+
+  <ros2_control name="GazeboSimSystem" type="system">
+    <hardware>
+      <!-- Use gz_ros2_control for modern Gazebo (Harmonic/Jazzy). 
+          If using Ignition Fortress (Humble), change to ign_ros2_control/IgnitionSystem -->
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+
+    <joint name="left_wheel_joint">
+      <command_interface name="effort"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="right_wheel_joint">
+      <command_interface name="effort"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+  <gazebo>
+    <!-- ros2_control plugin -->
+    <!-- Note: Change to ign_ros2_control-system / ign_ros2_control::IgnitionROS2ControlPlugin if on Ignition -->
+    <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <!-- need to create YAML file -->
+      <parameters>$(find balancing-robot-description)/config/controllers.yaml</parameters>
+    </plugin>
+
+    <!-- Keep IMU -->
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+  </gazebo>
+
+  <!-- mount imu sensor on the top plate -->
+  <gazebo reference="top_plate">
+    <sensor name="imu_sensor" type="imu">
+      <always_on>true</always_on>
+      <update_rate>400</update_rate>
+      <visualize>true</visualize>
+      <topic>imu</topic>
+      <imu></imu>
+    </sensor>
+  </gazebo>
+
+</robot>
+
+<!-- <?xml version="1.0"?>
 
 <robot name="balancing_robot">
 
-  <!-- publish to topic /imu -->
   <gazebo>
     <plugin
       filename="gz-sim-imu-system"
@@ -10,7 +156,7 @@
     </plugin>
   </gazebo>
 
-  <!-- subcribe to topic /cmd_vel -->
+  <!subcribe to topic /cmd_vel>
   <gazebo>  
     <plugin
       filename="gz-sim-diff-drive-system"
@@ -19,8 +165,10 @@
       <right_joint>right_wheel_joint</right_joint>
       <wheel_separation>0.28</wheel_separation>
       <wheel_radius>0.04</wheel_radius>
-      <odom_publish_frequency>50</odom_publish_frequency>
+      <odom_publish_frequency>200</odom_publish_frequency>
       <topic>cmd_vel</topic>
+      <! <max_linear_acceleration>5.0</max_linear_acceleration> >
+      <! <max_angular_acceleration>10.0</max_angular_acceleration> >
     </plugin>
   </gazebo>
 
@@ -34,8 +182,8 @@
   <joint name="base_footprint_joint" type="fixed">
     <parent link="base_footprint" />
     <child link="base_link" />
-    <!-- Change rpy from "0 0 0" to "0 0.035 0" (approx 2 degrees forward) -->
-    <origin xyz="0 0 0" rpy="0 0.035 0" /> 
+    <!Change rpy from "0 0 0" to "0 0.035 0" (approx 2 degrees forward)>
+    <origin xyz="0 0 0.04" rpy="0 0.035 0" /> 
   </joint>
 
 
@@ -54,7 +202,7 @@
     <inertial>
       <origin xyz="0 0 0.11" rpy="0 0 0"/> 
       <mass value="0.89"/>
-      <inertia ixx="0.00374" ixy="0" ixz="0" iyy="0.00154" iyz="0" izz="0.00315"/>
+      <inertia ixx="0.00374" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.00315"/>
     </inertial>
   </link>
 
@@ -136,11 +284,27 @@
   <gazebo reference="base_link">
     <sensor name="imu_sensor" type="imu">
       <always_on>true</always_on>
-      <update_rate>100</update_rate>
+      <update_rate>400</update_rate>
       <visualize>true</visualize>
       <topic>imu</topic>
       <imu></imu>
     </sensor>
   </gazebo>
 
-</robot>
+  <gazebo reference="left_wheel">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <kp>100000.0</kp>
+    <kd>1.0</kd>
+    <minDepth>0.001</minDepth>
+  </gazebo>
+
+  <gazebo reference="right_wheel">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <kp>100000.0</kp>
+    <kd>1.0</kd>
+    <minDepth>0.001</minDepth>
+  </gazebo>
+
+</robot> -->
