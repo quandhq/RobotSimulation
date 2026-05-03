@@ -1,6 +1,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/imu.hpp"
-#include "geometry_msgs/msg/twist.hpp"
+// #include "geometry_msgs/msg/twist.hpp"   //no longer send velocity to control motors, transfer torque instead
+#include "std_msgs/msg/float64_multi_array.hpp"     //transfer torque to control motors
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include "balancing_controller/PIDController.hpp"
@@ -13,13 +14,14 @@
 #define ACCEL_PITCH_DEG_PERCENTAGE (1-GYRO_Y_PERCENTAGE)
 #define MOTOR_SPEED_CLAMPING 5.0
 #define MAX_LINEAR_VELOCITY 1.131 //Vmax​=34.8×0.0325=1.131 m/s, <limit velocity="34.8"/>, <wheel_radius>0.0325</wheel_radius>)
+#define MAX_TORQUE 0.49
 
 class BalancerNode : public rclcpp::Node {
 private:
     std::unique_ptr<PIDControl> pid_;
     double target_angle_ = 0.0;
     rclcpp::Time last_time_;
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr motor_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr effort_pub_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
     double filtered_pitch = 0;
     bool is_filtered_pitch_first_initialized = false;
@@ -69,28 +71,30 @@ private:
             this->filtered_pitch =  GYRO_Y_PERCENTAGE * (this->filtered_pitch + (-gyro_y) * dt * 57.2958) + ACCEL_PITCH_DEG_PERCENTAGE * accel_pitch_deg; 
         }
 
-        auto drive = geometry_msgs::msg::Twist();
+        auto torque_cmd = std_msgs::msg::Float64MultiArray();
         double pid_output = 0.0;
         if(std::abs(filtered_pitch) >= 30)
         {
             (this->pid_)->reset();
-            drive.linear.x = 0;
-            drive.linear.z = 0;
+            torque_cmd.data.push_back(0);   //left wheel
+            torque_cmd.data.push_back(0);   //right wheel
             RCLCPP_INFO(this->get_logger(), "Reseting robot and PID controller");
         }
         else
         {
             if (std::abs(filtered_pitch) < 0.01) {
-                drive.linear.x = 0; // Don't fight tiny errors
+                torque_cmd.data.push_back(0);   //left wheel
+                torque_cmd.data.push_back(0);   //right wheel
             }
             else
             {
                 // 3. THE MATH, PIDControl calss
                 pid_output = pid_->calculatePIDOutput(target_angle_, filtered_pitch, -gyro_y, dt);
-                float velocity_cmd = pid_output * MAX_LINEAR_VELOCITY;
+                float torque_output = pid_output * MAX_TORQUE;
                 // 4. Act (Scale the output for Gazebo meters/second)
-                drive.linear.x = velocity_cmd;
-                RCLCPP_INFO(this->get_logger(), "filtered_pitch: %f, velocity_cmd: %f", filtered_pitch, velocity_cmd);
+                torque_cmd.data.push_back(torque_output);   //left wheel
+                torque_cmd.data.push_back(torque_output);   //right wheel
+                RCLCPP_INFO(this->get_logger(), "filtered_pitch: %f, torque_output: %f", filtered_pitch, torque_output);
                 PIDComponents PIDvalues = pid_->getPIDvalues();
                 RCLCPP_INFO(this->get_logger(), "P: %f, I: %f, D: %f", PIDvalues.p, PIDvalues.i, PIDvalues.d);
             }
@@ -98,7 +102,7 @@ private:
 
         RCLCPP_INFO(this->get_logger(), "accel_pitch_deg: %f, gyro_y: %f", accel_pitch_deg, gyro_y);
         // drive.linear.x = 3;
-        this->motor_pub_->publish(drive);
+        this->effort_pub_->publish(torque_cmd);
 
         last_time_ = now;
     }
@@ -106,7 +110,7 @@ private:
 public:
     BalancerNode() : Node("balancer_node") {
         this->set_parameter(rclcpp::Parameter("use_sim_time", true));
-        motor_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
+        effort_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("/effort_controller/commands", 10);
         auto qos = rclcpp::QoS(rclcpp::KeepLast(10)).best_effort();
         imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
             "imu", qos, std::bind(&BalancerNode::imu_callback, this, std::placeholders::_1));

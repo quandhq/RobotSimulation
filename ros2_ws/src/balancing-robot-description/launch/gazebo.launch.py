@@ -50,14 +50,29 @@ def generate_launch_description():
         executable='parameter_bridge',
         arguments=[
             '/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
-            '/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
+            # '/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist', #no longer transferring velocity to control motors
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
             '/model/balancing_robot/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
         ],
         output='screen'
     )
 
-    #---6. controller node---
+    # --- 6. controller_manager spawners ---
+    # This activates the joint_state_broadcaster (Sensors)
+    load_joint_state_broadcaster = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
+    )
+
+    # This activates the effort_controller (Actuators)
+    load_effort_controller = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["effort_controller", "--controller-manager", "/controller_manager"],
+    )
+
+    #---7. controller node---
     balancing_controller = Node(
         package='balancing_controller',
         executable='balancing_controller',
@@ -71,4 +86,6 @@ def generate_launch_description():
         spawn_entity,
         bridge,
         balancing_controller,
+        load_joint_state_broadcaster,
+        load_effort_controller
     ])
