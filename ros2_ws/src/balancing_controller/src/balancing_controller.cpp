@@ -6,9 +6,9 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include "balancing_controller/PIDController.hpp"
 
-#define Kp 0.8      // Significantly lower the "muscle"
+#define Kp 0.02      // Significantly lower the "muscle"
 #define Ki 0.0       // Keep at zero
-#define Kd 0.0      // Significantly increase the "braking" force
+#define Kd 0.00      // Significantly increase the "braking" force
 #define SCALE 1       //to scale down the output of PID algorithm 
 #define GYRO_Y_PERCENTAGE 0.95
 #define ACCEL_PITCH_DEG_PERCENTAGE (1-GYRO_Y_PERCENTAGE)
@@ -54,6 +54,7 @@ private:
         }
     
         double gyro_y = msg->angular_velocity.y; // Rad/sec, get the gyroscope data for instant data
+        gyro_y *= 57.2958; //convert to deg
         // atan2 gives us the tilt angle in radians based on gravity
         double accel_pitch_rad = atan2(acc_x, acc_z); // get the accelerometer for long term data
         float accel_pitch_deg = accel_pitch_rad * 57.2958; // Convert to degrees
@@ -68,7 +69,7 @@ private:
         }
         else
         {
-            this->filtered_pitch =  GYRO_Y_PERCENTAGE * (this->filtered_pitch + (-gyro_y) * dt * 57.2958) + ACCEL_PITCH_DEG_PERCENTAGE * accel_pitch_deg; 
+            this->filtered_pitch =  GYRO_Y_PERCENTAGE * (this->filtered_pitch + (-gyro_y) * dt) + ACCEL_PITCH_DEG_PERCENTAGE * accel_pitch_deg; 
         }
 
         auto torque_cmd = std_msgs::msg::Float64MultiArray();

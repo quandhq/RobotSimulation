@@ -16,6 +16,9 @@ def generate_launch_description():
     with open(urdf_file, 'r') as infp:
         robot_desc = infp.read()
         print(robot_desc)
+
+    #Replace the '$(find balancing-robot-description)' with the absolute path to 'controllers.yaml' file 
+    robot_desc = robot_desc.replace('$(find balancing-robot-description)', pkg_share)
     
     #--- 2. Start the robot state publiser ---
     # The "Nervous system": Publish URDF's joint positions to the whole ROS network
