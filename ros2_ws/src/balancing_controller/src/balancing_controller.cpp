@@ -6,9 +6,9 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include "balancing_controller/PIDController.hpp"
 
-#define Kp 0.02      // Significantly lower the "muscle"
-#define Ki 0.0       // Keep at zero
-#define Kd 0.00      // Significantly increase the "braking" force
+#define Kp 0.02      
+#define Ki 0.0       
+#define Kd 0.008     
 #define SCALE 1       //to scale down the output of PID algorithm 
 #define GYRO_Y_PERCENTAGE 0.95
 #define ACCEL_PITCH_DEG_PERCENTAGE (1-GYRO_Y_PERCENTAGE)
