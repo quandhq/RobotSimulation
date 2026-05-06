@@ -7,8 +7,8 @@
 #include "balancing_controller/PIDController.hpp"
 
 #define Kp 0.02      
-#define Ki 0.0       
-#define Kd 0.008     
+#define Ki 0.005      
+#define Kd 0.009     
 #define SCALE 1       //to scale down the output of PID algorithm 
 #define GYRO_Y_PERCENTAGE 0.95
 #define ACCEL_PITCH_DEG_PERCENTAGE (1-GYRO_Y_PERCENTAGE)

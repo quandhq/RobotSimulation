@@ -40,16 +40,24 @@ public:
         this->last_error_ = error;
         //Integral
         //Not using Deadband
-        if(std::abs(current_value) <= 10)
+        float output_i = 0.0;
+        if(this->ki_ >= 0.0001f)   //divide by zero guarding
         {
-            this->error_integral_ += error * dt;
-            this->error_integral_ = std::clamp(this->error_integral_, -0.5f, 0.5f);
-        } 
-        else
-        {
-            this->error_integral_ *= 0.99;
+            float clamp_output_i = 0.1f;
+            float max_error_intergral = clamp_output_i/this->ki_;
+            if(std::abs(current_value) <= 10)
+            {
+                this->error_integral_ += error * dt;
+                this->error_integral_ = std::clamp(this->error_integral_, -max_error_intergral, max_error_intergral);
+            } 
+            else
+            {
+                this->error_integral_ *= 0.99;
+            }
+            output_i = this->error_integral_ * this->ki_;
+            output_i = std::clamp(output_i, -clamp_output_i, clamp_output_i);
+
         }
-        float output_i = this->error_integral_ * this->ki_;
         //Proportional
         float output_p = error * this->kp_;
         this->output_p_ = output_p;
@@ -77,16 +85,24 @@ public:
         this->last_error_ = error;
         //Integral
         //Not using Deadband
-        if(std::abs(current_value) <= 10)
+        float output_i = 0.0;
+        if(this->ki_ >= 0.0001f)   //divide by zero guarding
         {
-            this->error_integral_ += error * dt;
-            this->error_integral_ = std::clamp(this->error_integral_, -0.5f, 0.5f);
-        } 
-        else
-        {
-            this->error_integral_ *= 0.99;
+            float clamp_output_i = 0.1f;
+            float max_error_intergral = clamp_output_i/this->ki_;
+            if(std::abs(current_value) <= 10)
+            {
+                this->error_integral_ += error * dt;
+                this->error_integral_ = std::clamp(this->error_integral_, -max_error_intergral, max_error_intergral);
+            } 
+            else
+            {
+                this->error_integral_ *= 0.99;
+            }
+            output_i = this->error_integral_ * this->ki_;
+            output_i = std::clamp(output_i, -clamp_output_i, clamp_output_i);
+
         }
-        float output_i = this->error_integral_ * this->ki_;
         //Proportional
         float output_p = error * this->kp_;
         this->output_p_ = output_p;
