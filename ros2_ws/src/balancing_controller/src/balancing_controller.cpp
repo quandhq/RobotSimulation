@@ -1,5 +1,6 @@
 #include "rclcpp/rclcpp.hpp"
-#include "sensor_msgs/msg/imu.hpp"
+#include "sensor_msgs/msg/imu.hpp" //to setup imu sensor
+#include "sensor_msgs/msg/joint_state.hpp"
 // #include "geometry_msgs/msg/twist.hpp"   //no longer send velocity to control motors, transfer torque instead
 #include "std_msgs/msg/float64_multi_array.hpp"     //transfer torque to control motors
 #include <tf2/LinearMath/Quaternion.h>
@@ -15,14 +16,26 @@
 #define MOTOR_SPEED_CLAMPING 5.0
 #define MAX_LINEAR_VELOCITY 1.131 //Vmax​=34.8×0.0325=1.131 m/s, <limit velocity="34.8"/>, <wheel_radius>0.0325</wheel_radius>)
 #define MAX_TORQUE 0.49
+#define WHEEL_RADIUS 0.0325
+#define OUTER_Kp 0.3
+#define OUTER_Ki 0.0
+#define OUTER_Kd 0.0
+#define MAX_ANGLE_CMD 3.0
 
 class BalancerNode : public rclcpp::Node {
 private:
     std::unique_ptr<PIDControl> pid_;
+    std::unique_ptr<PIDControl> outer_loop_pid_;
     double target_angle_ = 0.0;
     rclcpp::Time last_time_;
     rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr effort_pub_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_states_sub_;
+    double measured_velocity = 0;
+    double target_velocity = 0.0;
+    rclcpp::TimerBase::SharedPtr outer_loop_timer_;
+    rclcpp::Time outer_loop_lasttime_;
+    
     double filtered_pitch = 0;
     bool is_filtered_pitch_first_initialized = false;
 
@@ -108,6 +121,48 @@ private:
         last_time_ = now;
     }
 
+    void joint_states_callback(const sensor_msgs::msg::JointState::SharedPtr msg)
+    {
+        double left_velocity = 0.0, right_velocity = 0.0;
+        if((msg->name.size() == 2) && (msg->velocity.size() == 2))
+        {
+            bool is_left_wheel_found = false, is_right_wheel_found = false;
+            for(size_t i=0; i<msg->name.size(); ++i)
+            {
+                if(msg->name[i] == "left_wheel_joint")
+                {
+                    is_left_wheel_found = true;
+                    left_velocity = msg->velocity[i];
+                } 
+                if(msg->name[i] == "right_wheel_joint")
+                {
+                   is_right_wheel_found = true;
+                   right_velocity = msg->velocity[i]; 
+                }
+            }
+            if(is_left_wheel_found && is_right_wheel_found)
+            {
+                this->measured_velocity = (left_velocity+right_velocity)*WHEEL_RADIUS/2;
+                RCLCPP_INFO(this->get_logger(), "left_velocity: %f, right_velocity: %f, measured_velocity: %f", left_velocity, right_velocity, measured_velocity);
+            }
+        }
+        return;
+    }
+
+    void outterloop_callback()
+    {
+        auto now = this->now();
+        double dt = (now-this->outer_loop_lasttime_).seconds(); 
+        if(dt <= 0) return;
+        this->outer_loop_lasttime_ = now;
+        double angle_cmd = this->outer_loop_pid_->calculatePIDOutput(this->target_velocity, this->measured_velocity, dt);
+        angle_cmd *= MAX_ANGLE_CMD;
+        angle_cmd = std::clamp(angle_cmd, -MAX_ANGLE_CMD, MAX_ANGLE_CMD);
+        this->target_angle_ = angle_cmd;
+        RCLCPP_INFO(this->get_logger(), "measured_velocity: %f, target_angle_: %f", measured_velocity, target_angle_);
+        return;
+    }
+
 public:
     BalancerNode() : Node("balancer_node") {
         this->set_parameter(rclcpp::Parameter("use_sim_time", true));
@@ -122,6 +177,14 @@ public:
         
         this->last_time_ = this->now(); //assign utc timestamp to this->last_time_
         std::cout << this->last_time_.seconds() << "\n";
+        this->joint_states_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
+            "/joint_states", qos, std::bind(&BalancerNode::joint_states_callback, this, std::placeholders::_1)
+        );
+        this->outer_loop_pid_ = std::make_unique<PIDControl>(OUTER_Kp, OUTER_Ki, OUTER_Kd);
+        this->outer_loop_lasttime_ = this->now();
+        this->outer_loop_timer_ = this->create_wall_timer(std::chrono::milliseconds(25),
+            std::bind(&BalancerNode::outterloop_callback, this)
+        );
     }
 };
 
