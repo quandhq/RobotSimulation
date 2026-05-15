@@ -26,8 +26,10 @@ public:
     //use when there is no rate sensor
     float calculatePIDOutput(float target, float current_value, float dt)
     {
-        //Derivative
         float error = target - current_value;
+        //Proportional
+        float output_p = error * this->kp_;
+        //Derivative
         float output_d = 0;
         if(this->is_first_calculation == true)
         {
@@ -45,21 +47,26 @@ public:
         {
             float clamp_output_i = 0.1f;
             float max_error_intergral = clamp_output_i/this->ki_;
-            if(std::abs(current_value) <= 10)
+            output_i = this->error_integral_ * this->ki_; //old i term
+            output_i = std::clamp(output_i, -clamp_output_i, clamp_output_i);
+            float raw_output_unclamped = output_p + output_i +output_d; 
+            bool is_output_saturated = abs(raw_output_unclamped) > 1.0 ? true : false;
+            if(is_output_saturated == false)
             {
                 this->error_integral_ += error * dt;
                 this->error_integral_ = std::clamp(this->error_integral_, -max_error_intergral, max_error_intergral);
-            } 
+            }
             else
             {
-                this->error_integral_ *= 0.99;
+                //do nothing, keep the old integral
             }
-            output_i = this->error_integral_ * this->ki_;
+
+
+            output_i = this->error_integral_ * this->ki_;   // calculate the new i term
             output_i = std::clamp(output_i, -clamp_output_i, clamp_output_i);
 
         }
-        //Proportional
-        float output_p = error * this->kp_;
+        
         this->output_p_ = output_p;
         this->output_i_ = output_i;
         this->output_d_ = output_d;
@@ -71,8 +78,10 @@ public:
     //use when there is rate sensor
     double calculatePIDOutput(float target, float current_value, float rate_value, float dt)
     {
-        //Derivative
         float error = target - current_value;
+        //Proportional
+        float output_p = error * this->kp_;
+        //Derivative
         float output_d = 0;
         if(this->is_first_calculation == true)
         {
@@ -90,21 +99,26 @@ public:
         {
             float clamp_output_i = 0.1f;
             float max_error_intergral = clamp_output_i/this->ki_;
-            if(std::abs(current_value) <= 10)
+            output_i = this->error_integral_ * this->ki_; //old i term
+            output_i = std::clamp(output_i, -clamp_output_i, clamp_output_i);
+            float raw_output_unclamped = output_p + output_i +output_d; 
+            bool is_output_saturated = abs(raw_output_unclamped) > 1.0 ? true : false;
+            if(is_output_saturated == false)
             {
                 this->error_integral_ += error * dt;
                 this->error_integral_ = std::clamp(this->error_integral_, -max_error_intergral, max_error_intergral);
-            } 
+            }
             else
             {
-                this->error_integral_ *= 0.99;
+                //do nothing, keep the old integral
             }
-            output_i = this->error_integral_ * this->ki_;
+
+
+            output_i = this->error_integral_ * this->ki_;   // calculate the new i term
             output_i = std::clamp(output_i, -clamp_output_i, clamp_output_i);
 
         }
-        //Proportional
-        float output_p = error * this->kp_;
+        
         this->output_p_ = output_p;
         this->output_i_ = output_i;
         this->output_d_ = output_d;

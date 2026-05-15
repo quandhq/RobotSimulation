@@ -18,7 +18,7 @@
 #define MAX_TORQUE 0.49
 #define WHEEL_RADIUS 0.0325
 #define OUTER_Kp 0.3
-#define OUTER_Ki 0.0
+#define OUTER_Ki 0.05
 #define OUTER_Kd 0.0
 #define MAX_ANGLE_CMD 3.0
 
@@ -90,6 +90,7 @@ private:
         if(std::abs(filtered_pitch) >= 30)
         {
             (this->pid_)->reset();
+            (this->outer_loop_pid_)->reset();
             torque_cmd.data.push_back(0);   //left wheel
             torque_cmd.data.push_back(0);   //right wheel
             RCLCPP_INFO(this->get_logger(), "Reseting robot and PID controller");
@@ -108,7 +109,7 @@ private:
                 // 4. Act (Scale the output for Gazebo meters/second)
                 torque_cmd.data.push_back(torque_output);   //left wheel
                 torque_cmd.data.push_back(torque_output);   //right wheel
-                RCLCPP_INFO(this->get_logger(), "filtered_pitch: %f, torque_output: %f", filtered_pitch, torque_output);
+                RCLCPP_INFO(this->get_logger(), "target_angle_: %f, filtered_pitch: %f, torque_output: %f", target_angle_, filtered_pitch, torque_output);
                 PIDComponents PIDvalues = pid_->getPIDvalues();
                 RCLCPP_INFO(this->get_logger(), "P: %f, I: %f, D: %f", PIDvalues.p, PIDvalues.i, PIDvalues.d);
             }
@@ -149,15 +150,15 @@ private:
         return;
     }
 
-    void outterloop_callback()
+    void outerloop_callback()
     {
         auto now = this->now();
-        double dt = (now-this->outer_loop_lasttime_).seconds(); 
+        double dt = (now-this->outer_loop_lasttime_).seconds();
         if(dt <= 0) return;
         this->outer_loop_lasttime_ = now;
         double angle_cmd = this->outer_loop_pid_->calculatePIDOutput(this->target_velocity, this->measured_velocity, dt);
         angle_cmd *= MAX_ANGLE_CMD;
-        angle_cmd = std::clamp(angle_cmd, -MAX_ANGLE_CMD, MAX_ANGLE_CMD);
+        angle_cmd = std::clamp(angle_cmd, -MAX_ANGLE_CMD, MAX_ANGLE_CMD) * (-1); //reverse sign to get correct output
         this->target_angle_ = angle_cmd;
         RCLCPP_INFO(this->get_logger(), "measured_velocity: %f, target_angle_: %f", measured_velocity, target_angle_);
         return;
@@ -183,7 +184,7 @@ public:
         this->outer_loop_pid_ = std::make_unique<PIDControl>(OUTER_Kp, OUTER_Ki, OUTER_Kd);
         this->outer_loop_lasttime_ = this->now();
         this->outer_loop_timer_ = this->create_wall_timer(std::chrono::milliseconds(25),
-            std::bind(&BalancerNode::outterloop_callback, this)
+            std::bind(&BalancerNode::outerloop_callback, this)
         );
     }
 };
